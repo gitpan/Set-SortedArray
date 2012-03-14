@@ -1,5 +1,5 @@
 ---
-abstract: 'sets stored as sorted arrays for speed'
+abstract: 'sets stored as sorted arrays'
 author:
   - "\"Kevin Galinsky\" <\"kgalinsky plus cpan at gmail dot com\">"
 build_requires:
@@ -7,7 +7,7 @@ build_requires:
 configure_requires:
   Module::Build: 0.38
 dynamic_config: 1
-generated_by: 'Module::Build version 0.38, CPAN::Meta::Converter version 2.110930'
+generated_by: 'Module::Build version 0.38, CPAN::Meta::Converter version 2.112150'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -16,9 +16,9 @@ name: Set-SortedArray
 provides:
   Set::SortedArray:
     file: lib/Set/SortedArray.pm
-    version: v0.0.1
+    version: 0.02
 requires:
   perl: 5.006
 resources:
   license: http://dev.perl.org/licenses/
-version: v0.0.1
+version: 0.02

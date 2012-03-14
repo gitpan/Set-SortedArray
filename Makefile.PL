@@ -3,13 +3,13 @@ require 5.006;
 use ExtUtils::MakeMaker;
 WriteMakefile
 (
+  'PL_FILES' => {},
+  'INSTALLDIRS' => 'site',
   'NAME' => 'Set::SortedArray',
+  'EXE_FILES' => [],
   'VERSION_FROM' => 'lib/Set/SortedArray.pm',
   'PREREQ_PM' => {
                    'Test::More' => 0
-                 },
-  'INSTALLDIRS' => 'site',
-  'EXE_FILES' => [],
-  'PL_FILES' => {}
+                 }
 )
 ;

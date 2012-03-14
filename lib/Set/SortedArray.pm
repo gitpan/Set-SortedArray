@@ -5,67 +5,67 @@ use warnings;
 
 =head1 NAME
 
-Set::SortedArray - sets stored as sorted arrays for speed
+Set::SortedArray - sets stored as sorted arrays
 
 =head1 VERSION
 
-Version 0.0.1
+Version 0.02
 
 =cut
 
-use version; our $VERSION = qv('0.0.1');
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
     use Set::SortedArray;
-    my $s = Set::SortedArray->new( qw/ d b c a e /);
-    my $t = Set::SortedArray->new_presorted( qw/ b c e f g / );
+    my $S = Set::SortedArray->new( qw/ d b c a e /);
+    my $T = Set::SortedArray->new_presorted( qw/ b c e f g / );
 
-    print $s->as_string, "\n";
-    print $s, "\n";
+    print $S->as_string, "\n";
+    print $S, "\n";
 
-    $u = $s->union($t);
-    $i = $s->intersection($t);
-    $d = $s->difference($t);
-    $e = $s->symmetric_difference($t);
-    $a = $s->asymmetric_difference($t);
-    $v = $s->unique($t);
+    $U = $S->union($T);
+    $I = $S->intersection($T);
+    $D = $S->difference($T);
+    $E = $S->symmetric_difference($T);
+    $A = $S->asymmetric_difference($T);
+    $V = $S->unique($T);
 
-    $u = $s + $t;   # union
-    $i = $s * $t;   # intersection
-    $d = $s - $t;   # difference
-    $e = $s % $t;   # symmetric_difference
-    $v = $s / $t;   # unique
+    $U = $S + $T;   # union
+    $I = $S * $T;   # intersection
+    $D = $S - $T;   # difference
+    $E = $S % $T;   # symmetric_difference
+    $V = $S / $T;   # unique
 
-    $eq = $s->is_equal($t);
-    $dj = $s->is_disjoint($t);
-    $ps = $s->is_proper_subset($t);
-    $pS = $s->is_proper_superset($t);
-    $is = $s->is_subset($t);
-    $iS = $s->is_superset($t);
+    $eq = $S->is_equal($T);
+    $dj = $S->is_disjoint($T);
+    $ps = $S->is_proper_subset($T);
+    $pS = $S->is_proper_superset($T);
+    $is = $S->is_subset($T);
+    $iS = $S->is_superset($T);
 
-    $eq = $s == $t; # equal
-    $dj = $s != $t; # disjoint
-    $ps = $s < $t;  # is_proper_subset
-    $pS = $s > $t;  # is_proper_superset
-    $is = $s <= $t; # is_subset
-    $iS = $s >= $t; # is_superset
+    $eq = $S == $T; # equal
+    $dj = $S != $T; # disjoint
+    $ps = $S <  $T; # is_proper_subset
+    $pS = $S >  $T; # is_proper_superset
+    $is = $S <= $T; # is_subset
+    $iS = $S >= $T; # is_superset
 
     # amalgam of a few of the above
-    $cmp = $s->compare($t);
-    $cmp = $s <=> $t;
+    $cmp = $S->compare($T);
+    $cmp = $S <=> $T;
 
 =head2 DESCRIPTION
 
-Create a set that is stored as a sorted array. Similar to Set::Scalar, except
-optimized for speed and memory.
+Create a set that is stored as a sorted array. Modification is currently
+unsupported.
 
 =cut
 
 use overload
   '""'  => \&_as_string,
-  '+'   => \&union,
-  '*'   => \&intersection,
+  '+'   => \&merge,
+  '*'   => \&binary_intersection,
   '-'   => \&difference,
   '%'   => \&symmetric_difference,
   '/'   => \&unique,
@@ -106,7 +106,7 @@ sub new_presorted {
 
 =head1 MODIFYING
 
-TODO
+Currently unsupported. Inserting or deleting would take O(n) time.
 
 =cut
 
@@ -114,8 +114,8 @@ TODO
 
 =head2 as_string
 
-    print $s->as_string, "\n";
-    print $s, "\n";
+    print $S->as_string, "\n";
+    print $S, "\n";
 
 =head2 as_string_callback
 
@@ -123,9 +123,10 @@ TODO
 
 =cut
 
+# helper function that overload points to
 sub _as_string { shift->as_string(@_) }
 
-sub as_string { return '(' . join( ' ', @{ $_[0]->_members } ) . ')' }
+sub as_string { return '(' . join( ' ', @{ $_[0] } ) . ')' }
 
 sub as_string_callback {
     my ( $class, $callback ) = @_;
@@ -142,26 +143,25 @@ sub as_string_callback {
 
 =cut
 
-sub members  { return @{ $_[0] } }
-sub _members { return $_[0] }               # return arrayref of members
-sub size     { return scalar @{ $_[0] } }
+sub members { return @{ $_[0] } }
+sub size    { return scalar @{ $_[0] } }
 
 =head1 DERIVING
 
 =head2 union
 
-    $u = $s->union($t);
-    $u = $s->union($t, $v);
-    $u = $s + $t;
-    $u = $s + $t + $v; # inefficient
+    $U = $S->union($T);
+    $U = $S->union($T, $V);
+    $U = $S + $T;
+    $U = $S + $T + $V; # inefficient
 
 =cut
 
 sub union {
-    pop unless ( UNIVERSAL::can( $_[-1], '_members' ) );
+    return $_[0]->merge( $_[1] ) if ( @_ == 2 );
 
     my %members;
-    foreach my $set ( map { $_->_members } @_ ) {
+    foreach my $set (@_) {
         foreach my $member (@$set) {
             $members{$member} ||= $member;
         }
@@ -171,24 +171,55 @@ sub union {
     return $union;
 }
 
+=head2 merge
+
+    $U = $S->merge($T);
+    $U = $S + $T;
+
+Special case of union where only two sets are considered. "+" is actually
+overloaded to merge, not union. Named merge since this is essentially the
+"merge" step of a mergesort.
+
+=cut
+
+sub merge {
+    my ( $S, $T ) = @_;
+    my ( $i, $j ) = ( 0, 0 );
+    my $U = [];
+
+    while ( ( $i < @$S ) && ( $j < @$T ) ) {
+        my $s_i = $S->[$i];
+        my $t_j = $T->[$j];
+
+        if ( $s_i eq $t_j ) { push @$U, $s_i; $i++; $j++ }
+        elsif ( $s_i lt $t_j ) { push @$U, $s_i; $i++ }
+        else                   { push @$U, $t_j; $j++ }
+    }
+
+    push @$U, @$S[ $i .. $#$S ];
+    push @$U, @$T[ $j .. $#$T ];
+
+    return bless $U, ref($S);
+}
+
 =head2 intersection
 
-    $i = $s->intersection($t);
-    $i = $s->intersection($t, $u);
-    $i = $s * $t;
-    $i = $s * $t * $u; # inefficient
+    $I = $S->intersection($T);
+    $I = $S->intersection($T, $U);
+    $I = $S * $T;
+    $I = $S * $T * $U; # inefficient
 
 =cut
 
 sub intersection {
-    pop unless ( UNIVERSAL::can( $_[-1], '_members' ) );
+    return $_[0]->binary_intersection( $_[1] ) if ( @_ == 2 );
 
     my $total = @_;
 
     my %members;
     my %counts;
 
-    foreach my $set ( map { $_->_members } @_ ) {
+    foreach my $set (@_) {
         foreach my $member (@$set) {
             $members{$member} ||= $member;
             $counts{$member}++;
@@ -201,117 +232,133 @@ sub intersection {
     return $intersection;
 }
 
+=head2 binary_intersection
+
+    $I = $S->binary_intersection($T);
+    $I = $S * $T;
+
+Special case of intersection where only two sets are considered. "*" is
+actually overloaded to binary_intersection, not intersection.
+
+=cut
+
+sub binary_intersection {
+    my ( $S, $T ) = @_;
+    my ( $i, $j ) = ( 0, 0 );
+    my $I = [];
+
+    while ( ( $i < @$S ) && ( $j < @$T ) ) {
+        my $s_i = $S->[$i];
+        my $t_j = $T->[$j];
+
+        if ( $s_i eq $t_j ) { push @$I, $s_i; $i++; $j++ }
+        elsif ( $s_i lt $t_j ) { $i++ }
+        else                   { $j++ }
+    }
+
+    return bless $I, ref($S);
+}
+
 =head2 difference
 
-    $d = $s->difference($t);
-    $d = $s - $t;
+    $D = $S->difference($T);
+    $D = $S - $T;
 
 =cut
 
 sub difference {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
+    my ( $S, $T ) = @_;
+    my ( $i, $j ) = ( 0, 0 );
+    my $D = [];
 
-    my $i = 0;
-    my $j = 0;
+    while ( ( $i < @$S ) && ( $j < @$T ) ) {
+        my $s_i = $S->[$i];
+        my $t_j = $T->[$j];
 
-    my $difference = [];
-    while ( ( $i < @$this ) && ( $j < @$that ) ) {
-        my $member_i = $this->[$i];
-        my $member_j = $that->[$j];
-
-        if ( $member_i eq $member_j ) { $i++; $j++ }
-        elsif ( $member_i lt $member_j ) { push @$difference, $member_i; $i++ }
-        else                             { $j++ }
+        if ( $s_i eq $t_j ) { $i++; $j++ }
+        elsif ( $s_i lt $t_j ) { push @$D, $s_i; $i++ }
+        else                   { $j++ }
     }
 
-    push @$difference, @$this[ $i .. $#$this ];
+    push @$D, @$S[ $i .. $#$S ];
 
-    my $class = ref($this);
-    bless $difference, $class;
-
-    return $difference;
+    return bless $D, ref($S);
 }
 
 =head2 symmetric_difference
 
-    $e = $s->symmetric_difference($t);
-    $e = $s % $t;
+    $E = $S->symmetric_difference($T);
+    $E = $S % $T;
 
 =cut
 
 sub symmetric_difference {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
+    my ( $S, $T ) = @_;
+    my ( $i, $j ) = ( 0, 0 );
+    my $E = [];
 
-    my $i = 0;
-    my $j = 0;
+    while ( ( $i < @$S ) && ( $j < @$T ) ) {
+        my $s_i = $S->[$i];
+        my $t_j = $T->[$j];
 
-    my $difference = [];
-    while ( ( $i < @$this ) && ( $j < @$that ) ) {
-        my $member_i = $this->[$i];
-        my $member_j = $that->[$j];
-
-        if ( $member_i eq $member_j ) { $i++; $j++ }
-        elsif ( $member_i lt $member_j ) { push @$difference, $member_i; $i++ }
-        else                             { push @$difference, $member_j; $j++ }
+        if ( $s_i eq $t_j ) { $i++; $j++ }
+        elsif ( $s_i lt $t_j ) { push @$E, $s_i; $i++ }
+        else                   { push @$E, $t_j; $j++ }
     }
 
-    push @$difference, @$this[ $i .. $#$this ];
-    push @$difference, @$that[ $j .. $#$that ];
+    push @$E, @$S[ $i .. $#$S ];
+    push @$E, @$T[ $j .. $#$T ];
 
-    my $class = ref($this);
-    bless $difference, $class;
-
-    return $difference;
+    return bless $E, ref($S);
 }
 
 =head2 asymmetric_difference
 
-    $a = $s->asymmetric_difference($t);
+    $A = $S->asymmetric_difference($T);
 
-Returns [ $s - $t, $t - $s ], but more efficiently.
+Returns [ $S - $T, $T - $S ], but more efficiently.
 
 =cut
 
 sub asymmetric_difference {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
+    my ( $S, $T ) = @_;
+    my ( $i, $j ) = ( 0, 0 );
 
-    my $i = 0;
-    my $j = 0;
+    # $D = $S - $T, $B = $T - $S
+    # "B" chosen because "b" looks like mirror of "d"
+    my ( $D, $B ) = ( [], [] );
 
-    my ( $difference, $add ) = ( [], [] );
-    while ( ( $i < @$this ) && ( $j < @$that ) ) {
-        my $member_i = $this->[$i];
-        my $member_j = $that->[$j];
+    while ( ( $i < @$S ) && ( $j < @$T ) ) {
+        my $s_i = $S->[$i];
+        my $t_j = $T->[$j];
 
-        if ( $member_i eq $member_j ) { $i++; $j++ }
-        elsif ( $member_i lt $member_j ) { push @$difference, $member_i; $i++ }
-        else                             { push @$add,        $member_j; $j++ }
+        if ( $s_i eq $t_j ) { $i++; $j++ }
+        elsif ( $s_i lt $t_j ) { push @$D, $s_i; $i++ }
+        else                   { push @$B, $t_j; $j++ }
     }
+    push @$D, @$S[ $i .. $#$S ];
+    push @$B, @$T[ $j .. $#$T ];
 
-    push @$difference, @$this[ $i .. $#$this ];
-    push @$add,        @$that[ $j .. $#$that ];
-
-    my $class = ref($this);
-    bless $difference, $class;
-    bless $add,        $class;
-
-    return [ $difference, $add ];
+    my $class = ref($S);
+    bless $D, $class;
+    bless $B, $class;
+    return [ $D, $B ];
 }
 
 =head2 unique
 
-    $v = $s->unique($t);
-    $v = $s / $t;
+    $V = $S->unique($T);
+    $V = $S / $T;
 
 =cut
 
 sub unique {
-    pop unless ( UNIVERSAL::can( $_[-1], '_members' ) );
+    pop if ( ( @_ == 3 ) && ( !UNIVERSAL::isa( $_[2], __PACKAGE__ ) ) );
 
     my %members;
     my %counts;
 
-    foreach my $set ( map { $_->_members } @_ ) {
+    foreach my $set (@_) {
         foreach my $member (@$set) {
             $counts{$member}++;
         }
@@ -327,45 +374,45 @@ sub unique {
 
 =head2 is_equal
 
-    $eq = $s->is_equal($t);
-    $eq = $s == $t;
+    $eq = $S->is_equal($T);
+    $eq = $S == $T;
 
 =cut
 
 sub is_equal {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
-    return unless ( @$this == @$that );
-    return _is_equal( $this, $that );
+    my ( $S, $T ) = @_;
+    return unless ( @$S == @$T );
+    return _is_equal( $S, $T );
 }
 
 sub _is_equal {
-    my ( $this, $that ) = @_;
-    for ( my $i = 0 ; $i < @$this ; $i++ ) {
-        return unless ( $this->[$i] eq $that->[$i] );
+    my ( $S, $T ) = @_;
+    for ( my $i = 0 ; $i < @$S ; $i++ ) {
+        return unless ( $S->[$i] eq $T->[$i] );
     }
     return 1;
 }
 
 =head2 is_disjoint
 
-    $dj = $s->is_disjoint($t);
-    $dj = $s != $t;
+    $dj = $S->is_disjoint($T);
+    $dj = $S != $T;
 
 =cut
 
 sub is_disjoint {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
+    my ( $S, $T ) = @_;
 
     my $i = 0;
     my $j = 0;
 
-    while ( ( $i < @$this ) && ( $j < @$that ) ) {
-        my $member_i = $this->[$i];
-        my $member_j = $that->[$j];
+    while ( ( $i < @$S ) && ( $j < @$T ) ) {
+        my $s_i = $S->[$i];
+        my $t_j = $T->[$j];
 
-        if ( $member_i eq $member_j ) { return }
-        elsif ( $member_i lt $member_j ) { $i++ }
-        else                             { $j++ }
+        if ( $s_i eq $t_j ) { return }
+        elsif ( $s_i lt $t_j ) { $i++ }
+        else                   { $j++ }
     }
 
     return 1;
@@ -373,91 +420,91 @@ sub is_disjoint {
 
 =head2 is_proper_subset
 
-    $ps = $s->is_proper_subset($t);
-    $ps = $s < $t;
+    $ps = $S->is_proper_subset($T);
+    $ps = $S < $T;
 
 =head2 is_proper_superset
 
-    $pS = $s->is_proper_superset($t);
-    $pS = $s > $t;
+    $pS = $S->is_proper_superset($T);
+    $pS = $S > $T;
 
 =head2 is_subset
 
-    $is = $s->is_subset($t);
-    $is = $s <= $t;
+    $is = $S->is_subset($T);
+    $is = $S <= $T;
 
 =head2 is_superset
 
-    $iS = $s->is_superset($t);
-    $iS = $s >= $t;
+    $iS = $S->is_superset($T);
+    $iS = $S >= $T;
 
 =cut
 
 sub is_proper_subset {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
-    return unless ( @$this < @$that );
-    return _is_subset( $this, $that );
+    my ( $S, $T ) = @_;
+    return unless ( @$S < @$T );
+    return _is_subset( $S, $T );
 }
 
 sub is_proper_superset {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
-    return unless ( @$this > @$that );
-    return _is_subset( $that, $this );
+    my ( $S, $T ) = @_;
+    return unless ( @$S > @$T );
+    return _is_subset( $T, $S );
 }
 
 sub is_subset {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
-    return unless ( @$this <= @$that );
-    return _is_subset( $this, $that );
+    my ( $S, $T ) = @_;
+    return unless ( @$S <= @$T );
+    return _is_subset( $S, $T );
 }
 
 sub is_superset {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
-    return unless ( @$this >= @$that );
-    return _is_subset( $that, $this );
+    my ( $S, $T ) = @_;
+    return unless ( @$S >= @$T );
+    return _is_subset( $T, $S );
 }
 
 sub _is_subset {
-    my ( $this, $that ) = @_;
+    my ( $S, $T ) = @_;
 
     my $i = 0;
     my $j = 0;
 
-    while ( ( $i < @$this ) && ( $j < @$that ) ) {
-        my $member_i = $this->[$i];
-        my $member_j = $that->[$j];
+    while ( ( $i < @$S ) && ( $j < @$T ) ) {
+        my $s_i = $S->[$i];
+        my $t_j = $T->[$j];
 
-        if ( $member_i eq $member_j ) { $i++; $j++; }
-        elsif ( $member_i gt $member_j ) { $j++ }
-        else                             { return }
+        if ( $s_i eq $t_j ) { $i++; $j++; }
+        elsif ( $s_i gt $t_j ) { $j++ }
+        else                   { return }
     }
 
-    return $i == @$this;
+    return $i == @$S;
 }
 
 =head2 compare
 
-    $cmp = $s->compare($t);
-    $cmp = $s <=> $t;
+    $cmp = $S->compare($T);
+    $cmp = $S <=> $T;
 
 C<compare> returns:
 
-    0  if $s == $t
-    1  if $s > $t
-    -1 if $s < $t
+    0  if $S == $T
+    1  if $S > $T
+    -1 if $S < $T
     () otherwise
 
 =cut
 
 sub compare {
-    my ( $this, $that ) = map { $_->_members } @_[ 0, 1 ];
+    my ( $S, $T ) = @_;
 
-    if ( my $cmp = $#$this <=> $#$that ) {
+    if ( my $cmp = $#$S <=> $#$T ) {
         return $cmp == 1
-          ? ( _is_subset( $that, $this ) ? 1 : () )
-          : ( _is_subset( $this, $that ) ? -1 : () );
+          ? ( _is_subset( $T, $S ) ? 1 : () )
+          : ( _is_subset( $S, $T ) ? -1 : () );
     }
-    else { return _is_equal( $this, $that ) ? 0 : () }
+    else { return _is_equal( $S, $T ) ? 0 : () }
 }
 
 =head1 AUTHOR
@@ -502,7 +549,7 @@ L<http://search.cpan.org/dist/Set-SortedArray/>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright 2011 "Kevin Galinsky".
+Copyright 2011-2012 "Kevin Galinsky".
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of either: the GNU General Public License as published
